@@ -8,15 +8,47 @@
 
 import UIKit
 import CoreData
+import Parse
+import Bolts
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
     var window: UIWindow?
 
+    var utilities: Utilities!
+    var engine: NetworkingEngine!
+    
+    override init() {
+        if self.utilities == nil {
+            utilities = Utilities()
+        }
+        
+        if self.engine == nil {
+            engine = NetworkingEngine()
+        }
+        
+        super.init()
+    }
+    
+    class func sharedAppDelegate() -> AppDelegate {
+        return UIApplication.sharedApplication().delegate as! AppDelegate
+    }
 
     func application(application: UIApplication, didFinishLaunchingWithOptions launchOptions: [NSObject: AnyObject]?) -> Bool {
-        // Override point for customization after application launch.
+        
+        Parse.enableLocalDatastore()
+        
+        // Enable data sharing in main app.
+        Parse.enableDataSharingWithApplicationGroupIdentifier("group.Clients.TimeAndAHalf")
+        
+        // Initialize Parse.
+        Parse.setApplicationId("t2PeSftKqoxEslKn6UKZBdig703wxjdcGfmJg7TK",
+            clientKey: "6UvqTQGE5mvaMXPjeBY5T1lSRhDbQShc120z6ZjN")
+        
+        // [Optional] Track statistics around application opens.
+        PFAnalytics.trackAppOpenedWithLaunchOptions(launchOptions)
+        
         return true
     }
 
