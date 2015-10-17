@@ -1,5 +1,5 @@
 //
-//  TimeEntry.swift
+//  OWEntry.swift
 //  Time
 //
 //  Created by Benjamin Heutmaker on 8/7/15.
@@ -7,34 +7,54 @@
 //
 
 import UIKit
+import CoreData
 
-class Entry: NSObject {
+class OWEntry: NSManagedObject {
     
-    var startDate: NSDate?
-    var endDate: NSDate?
+    struct Keys {
+        static let EntityName = "Entry"
+        static let StartDate = "start_date"
+        static let EndDate = "end_date"
+        static let TotalEarnings = "total_earnings"
+        static let TotalTime = "total_time"
+    }
     
-    var totalEarnings: Double?
-    var totalTime: Double?
+    @NSManaged var end_date: NSDate?
+    @NSManaged var start_date: NSDate?
+    @NSManaged var total_earnings: NSNumber?
+    @NSManaged var total_time: NSNumber?
+    @NSManaged var owner: OWClient?
     
     var timer: NSTimer?
     var counter: Int = 0
     
-    init(start: NSDate) {
-        self.startDate = start
+    override init(entity: NSEntityDescription, insertIntoManagedObjectContext context: NSManagedObjectContext?) {
+        super.init(entity: entity, insertIntoManagedObjectContext: context)
     }
     
-    init(startDate: NSDate, endDate: NSDate, totalTime: Double, totalEarnings: Double) {
-        self.startDate = startDate
-        self.endDate = endDate
-        self.totalTime = totalTime
-        self.totalEarnings = totalEarnings
+    init(startDate: NSDate, context: NSManagedObjectContext) {
+        let entity = NSEntityDescription.entityForName(Keys.EntityName, inManagedObjectContext: context)!
+
+        super.init(entity: entity, insertIntoManagedObjectContext: context)
+        
+        setStartData(startDate)
+    }
+    
+    func setStartData(startDate: NSDate) {
+        self.start_date = startDate
+    }
+    
+    func setEndData(endDate: NSDate, rate: Double) {
+        self.end_date = endDate
+        self.total_time = findTotalTime()
+        self.total_earnings = findTotalEarnings(rate)
     }
     
     func totalInterval() -> NSTimeInterval? {
         
         guard
-            let start = startDate,
-            let end = endDate
+            let start = start_date,
+            let end = end_date
             
             else {
                 return nil

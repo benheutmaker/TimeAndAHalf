@@ -7,14 +7,14 @@
 //
 
 import UIKit
+import CoreData
 
-class ClientViewController: UIViewController, ClientDelegate {
+class OWClientViewController: UIViewController, OWClientViewDelegate {
     
-    //Singleton instance of NetworkingEngine reference
-    let network = AppDelegate.sharedAppDelegate().engine
+    lazy var sharedContext: NSManagedObjectContext = CoreDataStackManager.sharedInstance().managedObjectContext
     
     //Array of all clients shown in self.tableView
-    var clients: [Client] = []
+    var clients: [OWClient] = []
     
     
     //MARK: - UIViewController Lifecycle
@@ -22,8 +22,8 @@ class ClientViewController: UIViewController, ClientDelegate {
     override func viewDidLoad() {
         super.viewDidLoad()
         
+        clients = fetchAllClients()
         setTableViewResources()
-        loadDataFromNetwork()
     }
     
     override func viewWillAppear(animated: Bool) {
@@ -38,25 +38,34 @@ class ClientViewController: UIViewController, ClientDelegate {
         navigationItem.leftBarButtonItem = editButton
     }
     
+    func fetchAllClients() -> [OWClient] {
+        let fetchRequest = NSFetchRequest(entityName: "Client")
+        do {
+            return try sharedContext.executeFetchRequest(fetchRequest) as! [OWClient]
+        } catch let error as NSError {
+            print(error)
+            return [OWClient]()
+        }
+    }
     
     //MARK: - TableView Set Up
     
-    @IBOutlet var tableView: ClientTableView!
+    @IBOutlet var tableView: OWClientTableView!
     @IBOutlet var emptyLabel: UILabel!
     
-    var clientTableViewDelegate: ClientTableViewDelegate!
-    var clientTableViewDatasource: ClientTableViewDatasource!
+    var clientTableViewDelegate: OWClientTableViewDelegate!
+    var clientTableViewDatasource: OWClientTableViewDatasource!
     
     func setTableViewResources() {
-        //Initialize with all Clients data, or update clients array if not nil
+        //Initialize datasource and delegate with all Clients data, or update clients array if not nil
         if clientTableViewDelegate == nil {
-            clientTableViewDelegate = ClientTableViewDelegate(withClients: self.clients, delegate: self)
+            clientTableViewDelegate = OWClientTableViewDelegate(withClients: self.clients, delegate: self)
         } else {
             clientTableViewDelegate.clients = self.clients
         }
         
         if clientTableViewDatasource == nil {
-            clientTableViewDatasource = ClientTableViewDatasource(withClients: self.clients)
+            clientTableViewDatasource = OWClientTableViewDatasource(withClients: self.clients)
         } else {
             clientTableViewDatasource.clients = self.clients
         }
@@ -65,7 +74,7 @@ class ClientViewController: UIViewController, ClientDelegate {
         tableView.dataSource = clientTableViewDatasource
         tableView.delegate = clientTableViewDelegate
         
-        if clientTableViewDatasource.clients.count == 0 {
+        if clientTableViewDatasource.clients.isEmpty {
             emptyLabel.hidden = false
         } else {
             emptyLabel.hidden = true
@@ -87,52 +96,24 @@ class ClientViewController: UIViewController, ClientDelegate {
     }
     
     
-    //MARK: - Network calls
+    //MARK: - OWClientViewDelegate
     
-    func loadDataFromNetwork() {
-        
-        network.retrieveAllData { (clients) -> Void in
-            
-            for newClient in clients {
-                self.clients.insert(newClient, atIndex: 0)
-            }
-            
-            //Reload all data
-            dispatch_async(dispatch_get_main_queue(), { () -> Void in
-                self.setTableViewResources()
-            })
-        }
-    }
-    
-    
-    //MARK: - ClientDelegate
-    
-    func clientViewController(didSelectClientAtIndexPath client: Client, indexPath: NSIndexPath) {
+    func owClientViewController(didSelectClientAtIndexPath client: OWClient, indexPath: NSIndexPath) {
         performSegueWithIdentifier("DetailSegue", sender: indexPath)
     }
     
-    func clientViewcontroller(didSaveNewClient newClient: Client) {
+    func owClientViewcontroller(didSaveNewClient newClient: OWClient) {
         
-        //Save object to Parse -> Asynchronously retrieve from server, then display on tableView
-        network.saveClient(newClient) { (client) -> Void in
-            if client != nil {
-                
-                //Add client to tableView
-                self.loadDataFromNetwork()
-                
-            } else {
-                print("client returned nil in saveNewClient")
-            }
-        }
+        clients = fetchAllClients()
+        setTableViewResources()
+        
+        print(clients)
     }
     
-    func clientViewController(didDeleteClientAtIndexPath client: Client, indexPath: NSIndexPath, completion: () -> Void) {
-        network.deleteClient(client) { () -> Void in
-            self.clients.removeAtIndex(indexPath.row)
-            self.loadDataFromNetwork()
-            
-            completion()
-        }
+    func owClientViewController(didDeleteClientAtIndexPath client: OWClient, indexPath: NSIndexPath, completion: () -> Void) {
+        CoreDataStackManager.sharedInstance().managedObjectContext.deleteObject(client)
+        CoreDataStackManager.sharedInstance().saveContext()
+        setTableViewResources()
     }
     
     
@@ -140,7 +121,7 @@ class ClientViewController: UIViewController, ClientDelegate {
     
     override func prepareForSegue(segue: UIStoryboardSegue, sender: AnyObject?) {
         if segue.identifier == "DetailSegue" {
-            let entryVC = segue.destinationViewController as! EntryViewController
+            let entryVC = segue.destinationViewController as! OWEntryViewController
             
             //Reference the correct client
             let selectedIndex = sender as! NSIndexPath
@@ -152,7 +133,7 @@ class ClientViewController: UIViewController, ClientDelegate {
         
         } else if segue.identifier == "AddClient" {
             let addClientNavVC = segue.destinationViewController as! UINavigationController
-            let addClientVC = addClientNavVC.childViewControllers[0] as! AddClientTableViewController
+            let addClientVC = addClientNavVC.childViewControllers[0] as! NewClientTableViewController
             
             addClientVC.delegate = self
         }

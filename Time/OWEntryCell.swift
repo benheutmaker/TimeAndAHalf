@@ -1,5 +1,5 @@
 //
-//  EntryCell.swift
+//  OWEntryCell.swift
 //  Time
 //
 //  Created by Benjamin Heutmaker on 8/7/15.
@@ -8,7 +8,7 @@
 
 import UIKit
 
-class EntryCell: UITableViewCell {
+class OWEntryCell: UITableViewCell {
     
     @IBOutlet var startTimeLabel: UILabel!
     @IBOutlet var endTimeLabel: UILabel!

@@ -1,5 +1,5 @@
 //
-//  ClientTableView.swift
+//  OWClientTableView.swift
 //  Time and a Half
 //
 //  Created by Benjamin Heutmaker on 10/8/15.
@@ -8,6 +8,6 @@
 
 import UIKit
 
-class ClientTableView: UITableView {
+class OWClientTableView: UITableView {
     
 }

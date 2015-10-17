@@ -7,18 +7,24 @@
 //
 
 import UIKit
+import CoreData
 
-class AddClientTableViewController: UITableViewController, UITextFieldDelegate {
+class NewClientTableViewController: UITableViewController, UITextFieldDelegate {
     
-    @IBOutlet var clientNameTextField: UITextField!
-    @IBOutlet var rateTextField: UITextField!
+    @IBOutlet var clientNameTextField: OWTextField!
+    @IBOutlet var rateTextField: OWTextField!
+    @IBOutlet var urlTextField: OWTextField!
     
     @IBOutlet var saveButton: UIBarButtonItem!
     @IBOutlet var cancelButton: UIBarButtonItem!
     
-    var delegate: ClientDelegate!
+    var delegate: OWClientViewDelegate!
     
     var alert: UIAlertController!
+    
+    lazy var sharedContext: NSManagedObjectContext = {
+        return CoreDataStackManager.sharedInstance().managedObjectContext
+        }()
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -26,52 +32,86 @@ class AddClientTableViewController: UITableViewController, UITextFieldDelegate {
         clientNameTextField.delegate = self
         rateTextField.delegate = self
     }
+    
+    override func viewWillAppear(animated: Bool) {
+        super.viewWillAppear(animated)
+        
+        clientNameTextField.becomeFirstResponder()
+    }
 
     @IBAction func saveButtonAction(sender: UIBarButtonItem) {
         
-        if clientNameTextField.text == nil && rateTextField.text == nil {
+        if clientNameTextField.text == "" && rateTextField.text == "$" {
             
             alert = UIAlertController(title: "Missing fields", message: "Looks like both fields are blank. Please enter both the Client's name and the hourly rate at which you charge.", preferredStyle: UIAlertControllerStyle.Alert)
+            alert.addAction(UIAlertAction(title: "Got it", style: UIAlertActionStyle.Default, handler: nil))
             self.presentViewController(alert, animated: true, completion: nil)
             
             return
-        }
         
-        guard let clientName = clientNameTextField.text else {
+        } else if clientNameTextField.text == "" {
             
             alert = UIAlertController(title: "Client must have a name!", message: "Please give the client a name!", preferredStyle: UIAlertControllerStyle.Alert)
+            alert.addAction(UIAlertAction(title: "Got it", style: UIAlertActionStyle.Default, handler: nil))
             self.presentViewController(alert, animated: true, completion: nil)
             
             return
-        }
         
-        guard let clientRateString = rateTextField.text else {
+        } else if rateTextField.text == "" {
             
             alert = UIAlertController(title: "You must include a rate", message: "Please specify the rate you charge the client hourly", preferredStyle: UIAlertControllerStyle.Alert)
+            alert.addAction(UIAlertAction(title: "Got it", style: UIAlertActionStyle.Default, handler: nil))
             self.presentViewController(alert, animated: true, completion: nil)
             
             return
+            
         }
         
-        guard let rateDoubleValue = Double(clientRateString) else {
+        guard let rateDoubleValue = Double(rateTextField.text!) else {
             
             alert = UIAlertController(title: "Invalid rate format", message: "The rate field must be in a decimal format such as: 10.55", preferredStyle: UIAlertControllerStyle.Alert)
+            alert.addAction(UIAlertAction(title: "Got it", style: UIAlertActionStyle.Default, handler: nil))
             self.presentViewController(alert, animated: true, completion: nil)
             
             return
         }
         
-        let newClient = Client(title: clientName, rate: rateDoubleValue, id: nil)
-        delegate.clientViewcontroller(didSaveNewClient: newClient)
+        let clientDictionary: [String : AnyObject] = [
+            OWClient.Keys.Title : clientNameTextField.text!,
+            OWClient.Keys.Rate : rateDoubleValue,
+            OWClient.Keys.Entries : [OWEntry]()
+        ]
+        
+        let newClient = OWClient(dictionary: clientDictionary, context: sharedContext)
+        
+        newClient.urlImageURLString = urlTextField.text //Optional
+
+        
+        do {
+            try sharedContext.save()
+            delegate.owClientViewcontroller(didSaveNewClient: newClient)
+            
+        } catch let error as NSError? {
+            print(error!)
+        }
         
         performSegueWithIdentifier("unwindToMasterClientViewController", sender: sender)
     }
     
     @IBAction func cancelButtonAction(sender: UIBarButtonItem) {
+        tableView.endEditing(true)
         performSegueWithIdentifier("unwindToMasterClientViewController", sender: sender)
     }
     
+    
     //UITextField Delegate
+    
+    func textField(textField: UITextField, shouldChangeCharactersInRange range: NSRange, replacementString string: String) -> Bool {
+        let text = NSString(string: textField.text!)
+        text.stringByReplacingCharactersInRange(range, withString: "$" + (text as String))
+        
+        return true
+    }
     
     func textFieldShouldReturn(textField: UITextField) -> Bool {
         

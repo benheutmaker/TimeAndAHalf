@@ -7,10 +7,13 @@
 //
 
 import UIKit
+import CoreData
 
-class EntryViewController: UIViewController, UITableViewDelegate, UITableViewDataSource {
+class OWEntryViewController: UIViewController, UITableViewDelegate, UITableViewDataSource {
     
-    var network = AppDelegate.sharedAppDelegate().engine
+    lazy var sharedContext: NSManagedObjectContext = {
+        return CoreDataStackManager.sharedInstance().managedObjectContext
+        }()
     
     @IBOutlet var tableView: UITableView!
     
@@ -23,15 +26,16 @@ class EntryViewController: UIViewController, UITableViewDelegate, UITableViewDat
     
     @IBOutlet var emptyLabel: UILabel!
     
-    var client: Client!
-    var currentEntry: Entry?
+    var client: OWClient!
+    
     var isCounting = false
     
     var selectedIndex: NSIndexPath?
     
     let utilities = AppDelegate.sharedAppDelegate().utilities
     
-    var refreshControl: UIRefreshControl!
+    
+    //MARK: - UIViewController Lifecycle
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -39,8 +43,6 @@ class EntryViewController: UIViewController, UITableViewDelegate, UITableViewDat
         tableView.delegate = self
         tableView.dataSource = self
         tableView.allowsMultipleSelectionDuringEditing = false
-        
-        setupRefreshControl(onTableView: self.tableView)
         
         punchOutButton.hidden = true
         
@@ -55,29 +57,26 @@ class EntryViewController: UIViewController, UITableViewDelegate, UITableViewDat
         rateLabel.text = client.rateString()
     }
     
-    func setupRefreshControl(onTableView tableView: UITableView) {
-        refreshControl = UIRefreshControl()
-        refreshControl.backgroundColor = UIColor.blackColor()
-        refreshControl.tintColor = UIColor.whiteColor()
-        refreshControl.addTarget(self, action: "reloadData", forControlEvents: UIControlEvents.ValueChanged)
+    func fetchAllEntries() -> [OWEntry] {
+        let fetchRequest = NSFetchRequest(entityName: "Client")
         
-        tableView.addSubview(refreshControl)
+        
     }
     
-    func reloadData() {
-        print("reload entries")
-        
-        refreshControl.endRefreshing()
-    }
     
-    @IBAction func startTimer(sender: UIButton) {
+    //MARK: - Entry Handler Methods
+    
+    var currentEntry: OWEntry?
+    
+    @IBAction func punchIn() {
         
         if isCounting {
+            //Do nothing
             return
             
         } else {
             currentEntry = nil
-            currentEntry = Entry(start: NSDate())
+            currentEntry = OWEntry(startDate: NSDate(), context: sharedContext)
             
             currentEntry?.timer = NSTimer.scheduledTimerWithTimeInterval(1, target: self, selector: "updateTimerLabel", userInfo: nil, repeats: true)
             isCounting = true
@@ -89,21 +88,11 @@ class EntryViewController: UIViewController, UITableViewDelegate, UITableViewDat
     
     @IBAction func endTimer(sender: UIButton) {
         
-        //Set Out time
-        currentEntry?.endDate = NSDate()
-        
-        //Insert TimeEntry to datasource and update tableView
-        if let newEntry = currentEntry {
-            
-            //MARK: - Save entry to server
-            network.saveNewEntryToClient(client, entry: newEntry, response: { (updatedEntries) -> Void in
-                dispatch_async(dispatch_get_main_queue(), { () -> Void in
-                    self.client.entries = updatedEntries
-                    self.selectedIndex = NSIndexPath(forRow: 0, inSection: 0)
-                    self.tableView.insertRowsAtIndexPaths([NSIndexPath(forRow: 0, inSection: 0)], withRowAnimation: UITableViewRowAnimation.Right)
-                })
-            })
-        }
+        //Set final values and save data (to sharedContext)
+        currentEntry?.setEndData(NSDate(), rate: client.rate)
+        client.entries.insert(currentEntry!, atIndex: 0)
+        CoreDataStackManager.sharedInstance().saveContext()
+        tableView.insertRowsAtIndexPaths([NSIndexPath(forRow: 0, inSection: 0)], withRowAnimation: .Right)
         
         //Stop and reset timer
         currentEntry?.timer?.invalidate()
@@ -134,7 +123,7 @@ class EntryViewController: UIViewController, UITableViewDelegate, UITableViewDat
         var total: Double = 0.0
         
         for entry in client.entries {
-            total += entry.findTotalEarnings(client.rate)
+            total += entry.findTotalEarnings(Double(client.rate))
         }
         
         totalEarningLabel.text = "$\(total) earned"
@@ -157,12 +146,12 @@ class EntryViewController: UIViewController, UITableViewDelegate, UITableViewDat
         
         let deleteAction = UITableViewRowAction(style: UITableViewRowActionStyle.Destructive, title: "Delete") { (action, actionIndexPath) -> Void in
             
-            self.network.deleteEntryFromClient(self.client, entry: self.client.entries[indexPath.row], completion: { () -> Void in
-                dispatch_async(dispatch_get_main_queue(), { () -> Void in
-                    self.client.entries.removeAtIndex(actionIndexPath.row)
-                    tableView.dataSource?.tableView!(tableView, commitEditingStyle: UITableViewCellEditingStyle.Delete, forRowAtIndexPath: indexPath)
-                })
-            })
+//            self.network.deleteEntryFromClient(self.client, entry: self.client.entries[indexPath.row], completion: { () -> Void in
+//                dispatch_async(dispatch_get_main_queue(), { () -> Void in
+//                    self.client.entries.removeAtIndex(actionIndexPath.row)
+//                    tableView.dataSource?.tableView!(tableView, commitEditingStyle: UITableViewCellEditingStyle.Delete, forRowAtIndexPath: indexPath)
+//                })
+//            })
         }
         
         return [deleteAction]
@@ -186,7 +175,7 @@ class EntryViewController: UIViewController, UITableViewDelegate, UITableViewDat
     
     func tableView(tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         
-        if client.entries.count == 0 {
+        if client.entries.isEmpty {
             emptyLabel.hidden = false
         } else {
             emptyLabel.hidden = true
@@ -196,20 +185,20 @@ class EntryViewController: UIViewController, UITableViewDelegate, UITableViewDat
     }
     
     func tableView(tableView: UITableView, cellForRowAtIndexPath indexPath: NSIndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCellWithIdentifier("EntryCell") as! EntryCell
+        let cell = tableView.dequeueReusableCellWithIdentifier("OWEntryCell") as! OWEntryCell
         
         let entry = client.entries[indexPath.row]
         
-        cell.startTimeLabel.text = utilities.dateToString(entry.startDate!)
-        cell.endTimeLabel.text = utilities.dateToString(entry.endDate!)
+        cell.startTimeLabel.text = utilities.dateToString(entry.start_date!)
+        cell.endTimeLabel.text = utilities.dateToString(entry.end_date!)
         
-        if entry.totalTime == 0.0 {
+        if entry.total_time == 0.0 {
             cell.totalTimeLabel.text = "0.00"
         } else {
             cell.totalTimeLabel.text = entry.totalTiimeString()
         }
         
-        cell.totalEarningsLabel.text = "$\(entry.findTotalEarnings(client.rate))"
+        cell.totalEarningsLabel.text = "$\(entry.findTotalEarnings(Double(client.rate)))"
         
         return cell
     }

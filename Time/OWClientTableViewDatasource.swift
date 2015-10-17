@@ -1,5 +1,5 @@
 //
-//  ClientTableViewDatasource.swift
+//  OWClientTableViewDatasource.swift
 //  Time and a Half
 //
 //  Created by Benjamin Heutmaker on 10/8/15.
@@ -8,11 +8,11 @@
 
 import UIKit
 
-class ClientTableViewDatasource: NSObject, UITableViewDataSource {
+class OWClientTableViewDatasource: NSObject, UITableViewDataSource {
     
-    var clients: [Client]!
+    var clients: [OWClient]!
     
-    init(withClients clients: [Client]) {
+    init(withClients clients: [OWClient]) {
         super.init()
         
         //Set values
@@ -33,10 +33,15 @@ class ClientTableViewDatasource: NSObject, UITableViewDataSource {
     }
     
     func tableView(tableView: UITableView, cellForRowAtIndexPath indexPath: NSIndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCellWithIdentifier("ClientCell")!
+        let cell = tableView.dequeueReusableCellWithIdentifier("ClientCell") as! OWClientCell
         
-        cell.textLabel?.text = clients[indexPath.row].title
-        cell.detailTextLabel?.text = "$\(clients[indexPath.row].rate)/hr"
+        let client = clients[indexPath.row]
+        
+        if let imageData = client.urlImageData {
+            cell.urlImageView.image = UIImage(data: imageData)
+        }
+        cell.titleLabel.text = client.title
+        cell.rateLabel.text = client.rateString()
         
         return cell
     }
